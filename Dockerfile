@@ -1,8 +1,9 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
 FROM ${BUILD_FROM}
 
 # HA base images are Alpine — bashio, s6-overlay, and jq are already installed.
-# We only need to add ffmpeg (for RTSP->HLS) and Python.
+# We only need Python and ffmpeg (for RTSP->HLS), plus build deps for
+# native-extension Python packages (cryptography, Pillow).
 RUN apk add --no-cache \
         python3 \
         py3-pip \
@@ -10,7 +11,9 @@ RUN apk add --no-cache \
         gcc \
         musl-dev \
         python3-dev \
-        libffi-dev
+        libffi-dev \
+        jpeg-dev \
+        zlib-dev
 
 WORKDIR /app
 

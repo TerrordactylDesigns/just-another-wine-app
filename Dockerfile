@@ -2,9 +2,7 @@ ARG BUILD_FROM
 FROM ${BUILD_FROM:-python:3.14-slim}
 
 # ffmpeg required for RTSP -> HLS transcoding
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg bash curl && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ffmpeg
 
 # bashio for reading Home Assistant add-on options
 RUN curl -J -L -o /tmp/bashio.tar.gz \

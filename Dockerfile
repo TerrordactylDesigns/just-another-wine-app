@@ -1,25 +1,24 @@
 ARG BUILD_FROM
-FROM ${BUILD_FROM:-python:3.14-slim}
+FROM ${BUILD_FROM}
 
-# ffmpeg required for RTSP -> HLS transcoding
-RUN apk add --no-cache ffmpeg
-
-# bashio for reading Home Assistant add-on options
-RUN curl -J -L -o /tmp/bashio.tar.gz \
-      "https://github.com/hassio-addons/bashio/archive/v0.16.2.tar.gz" && \
-    mkdir -p /tmp/bashio && \
-    tar zxvf /tmp/bashio.tar.gz --strip-components 1 -C /tmp/bashio && \
-    mv /tmp/bashio/lib /usr/lib/bashio && \
-    ln -s /usr/lib/bashio/bashio /usr/bin/bashio && \
-    rm -rf /tmp/bashio /tmp/bashio.tar.gz
+# HA base images are Alpine — bashio, s6-overlay, and jq are already installed.
+# We only need to add ffmpeg (for RTSP->HLS) and Python.
+RUN apk add --no-cache \
+        python3 \
+        py3-pip \
+        ffmpeg \
+        gcc \
+        musl-dev \
+        python3-dev \
+        libffi-dev
 
 WORKDIR /app
 
 COPY app/backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN pip install --no-cache-dir --break-system-packages -r /app/backend/requirements.txt
 
 COPY app/ /app/
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-CMD ["/run.sh"]
+CMD [ "/run.sh" ]

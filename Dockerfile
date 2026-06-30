@@ -1,5 +1,5 @@
 ARG BUILD_FROM
-FROM ${BUILD_FROM:-python:3.11-slim}
+FROM ${BUILD_FROM:-python:3.14-slim}
 
 # ffmpeg required for RTSP -> HLS transcoding
 RUN apt-get update && \

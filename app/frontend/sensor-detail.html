@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sensor Detail — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Sensor</div>
+        <h1 id="sensor-name">Loading…</h1>
+      </div>
+      <div class="page-actions">
+        <select id="hours-select" onchange="loadChart()" style="width:140px;margin-bottom:0;">
+          <option value="6">Last 6 hours</option>
+          <option value="24" selected>Last 24 hours</option>
+          <option value="168">Last 7 days</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card-grid" style="margin-bottom:var(--space-6);">
+      <div class="stat-card accent"><div class="stat-value" id="stat-latest">—</div><div class="stat-label">Latest Reading</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-min">—</div><div class="stat-label">Min</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-max">—</div><div class="stat-label">Max</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-avg">—</div><div class="stat-label">Average</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:var(--space-6);">
+      <h2 style="margin-bottom:var(--space-4);">History</h2>
+      <canvas id="chart" style="width:100%;height:220px;"></canvas>
+    </div>
+
+    <div class="card" style="margin-bottom:var(--space-6);">
+      <h2 style="margin-bottom:var(--space-4);">Alert Rules</h2>
+      <div id="rules-list"></div>
+      <button class="btn btn-sm" style="margin-top:var(--space-3);" onclick="document.getElementById('rule-modal').classList.add('open')">+ Add Rule</button>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:var(--space-4);">Alert History</h2>
+      <div id="alert-history"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="rule-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Alert Rule</h3>
+      <button onclick="document.getElementById('rule-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Name</label><input type="text" id="r-name" placeholder="e.g. Too warm" />
+    <label>Condition</label>
+    <select id="r-condition">
+      <option value="sensor.threshold.high">Above threshold</option>
+      <option value="sensor.threshold.low">Below threshold</option>
+      <option value="sensor.out_of_range">Outside range</option>
+      <option value="sensor.rapid_change">Rapid change</option>
+    </select>
+    <div class="field-row">
+      <div><label>Low Threshold</label><input type="number" id="r-low" /></div>
+      <div><label>High Threshold</label><input type="number" id="r-high" /></div>
+    </div>
+    <label>Severity</label>
+    <select id="r-severity"><option value="info">Info</option><option value="warning" selected>Warning</option><option value="critical">Critical</option></select>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="createRule()">Add Rule</button>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/charts.js"></script>
+<script>
+renderSidebar("sensors");
+const sensorId = new URLSearchParams(window.location.search).get("id");
+
+async function loadSensor() {
+  const s = await API.get(`/api/sensors/${sensorId}`);
+  document.getElementById("sensor-name").textContent = s.name;
+}
+
+async function loadChart() {
+  const hours = document.getElementById("hours-select").value;
+  const readings = await API.get(`/api/sensors/${sensorId}/readings?hours=${hours}`);
+  const summary = await API.get(`/api/sensors/${sensorId}/readings/summary?hours=${hours}`);
+
+  document.getElementById("stat-latest").textContent = summary.latest_value ?? "—";
+  document.getElementById("stat-min").textContent = summary.min_value ?? "—";
+  document.getElementById("stat-max").textContent = summary.max_value ?? "—";
+  document.getElementById("stat-avg").textContent = summary.avg_value ?? "—";
+
+  const sorted = [...readings].sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at));
+  Charts.lineChart(document.getElementById("chart"), sorted);
+}
+
+async function loadRules() {
+  const rules = await API.get(`/api/alert-rules?domain=sensor`);
+  const relevant = rules.filter((r) => r.entity_id === parseInt(sensorId) || r.entity_id === null);
+  const el = document.getElementById("rules-list");
+  if (relevant.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No alert rules configured for this sensor.</p>`;
+    return;
+  }
+  el.innerHTML = relevant
+    .map(
+      (r) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-2) 0;border-bottom:1px solid var(--color-border);">
+        <span>${escapeHtml(r.name)} <span class="badge ${r.severity === "critical" ? "past_peak" : "aging"}">${r.severity}</span></span>
+        <span style="font-size:13px;color:var(--color-text-dim);">${r.threshold_low ?? ""}${r.threshold_low && r.threshold_high ? " – " : ""}${r.threshold_high ?? ""}</span>
+      </div>`
+    )
+    .join("");
+}
+
+async function createRule() {
+  await API.post("/api/alert-rules", {
+    name: document.getElementById("r-name").value,
+    domain: "sensor",
+    entity_type: "sensor",
+    entity_id: parseInt(sensorId),
+    condition_type: document.getElementById("r-condition").value,
+    threshold_low: parseFloat(document.getElementById("r-low").value) || null,
+    threshold_high: parseFloat(document.getElementById("r-high").value) || null,
+    severity: document.getElementById("r-severity").value,
+  });
+  document.getElementById("rule-modal").classList.remove("open");
+  loadRules();
+}
+
+async function loadAlertHistory() {
+  const alerts = await API.get(`/api/alerts?limit=50`);
+  const relevant = alerts.filter((a) => a.entity_type === "sensor" && a.entity_id === parseInt(sensorId));
+  const el = document.getElementById("alert-history");
+  if (relevant.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No alert history for this sensor.</p>`;
+    return;
+  }
+  el.innerHTML = `
+    <table><thead><tr><th>Title</th><th>Triggered</th><th>Resolved</th></tr></thead>
+    <tbody>${relevant.map((a) => `<tr><td>${escapeHtml(a.title)}</td><td>${fmtDate(a.triggered_at)}</td><td>${a.resolved_at ? fmtDate(a.resolved_at) : "Active"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+loadSensor();
+loadChart();
+loadRules();
+loadAlertHistory();
+</script>
+</body>
+</html>

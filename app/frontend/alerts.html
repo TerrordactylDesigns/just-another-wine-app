@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Alerts — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Monitoring</div>
+        <h1>Alerts</h1>
+      </div>
+      <div class="page-actions">
+        <select id="severity-filter" onchange="loadAlerts()" style="width:140px;margin-bottom:0;">
+          <option value="">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="warning">Warning</option>
+          <option value="info">Info</option>
+        </select>
+        <select id="resolved-filter" onchange="loadAlerts()" style="width:140px;margin-bottom:0;">
+          <option value="false">Active only</option>
+          <option value="">All</option>
+          <option value="true">Resolved</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card" id="alert-table-wrap">
+      <table>
+        <thead><tr><th>Severity</th><th>Title</th><th>Message</th><th>Triggered</th><th>Status</th><th></th></tr></thead>
+        <tbody id="alert-tbody"><tr><td colspan="6" style="color:var(--color-text-dim);">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <section style="margin-top:var(--space-7);">
+      <h2 style="margin-bottom:var(--space-4);">Alert Rules</h2>
+      <div class="card">
+        <table>
+          <thead><tr><th>Name</th><th>Domain</th><th>Condition</th><th>Severity</th><th>Enabled</th></tr></thead>
+          <tbody id="rules-tbody"><tr><td colspan="5" style="color:var(--color-text-dim);">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("alerts");
+
+async function loadAlerts() {
+  const severity = document.getElementById("severity-filter").value;
+  const resolved = document.getElementById("resolved-filter").value;
+  let url = "/api/alerts?limit=200";
+  if (severity) url += `&severity=${severity}`;
+  if (resolved !== "") url += `&resolved=${resolved}`;
+
+  const alerts = await API.get(url);
+  const tbody = document.getElementById("alert-tbody");
+
+  if (alerts.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><h3>No alerts match this filter</h3></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = alerts
+    .map(
+      (a) => `
+      <tr>
+        <td><span class="badge ${a.severity === "critical" ? "past_peak" : a.severity === "warning" ? "aging" : "ready"}">${a.severity}</span></td>
+        <td>${escapeHtml(a.title)}</td>
+        <td style="color:var(--color-text-dim);">${escapeHtml(a.message || "—")}</td>
+        <td>${fmtDate(a.triggered_at)}</td>
+        <td>${a.resolved_at ? "Resolved" : a.acknowledged_at ? "Acknowledged" : "Active"}</td>
+        <td>
+          ${!a.acknowledged_at && !a.resolved_at ? `<button class="btn btn-sm" onclick="acknowledge(${a.id})">Ack</button>` : ""}
+          ${!a.resolved_at ? `<button class="btn btn-sm" onclick="resolve(${a.id})">Resolve</button>` : ""}
+        </td>
+      </tr>`
+    )
+    .join("");
+}
+
+async function acknowledge(id) {
+  await API.put(`/api/alerts/${id}/acknowledge`);
+  loadAlerts();
+}
+
+async function resolve(id) {
+  await API.put(`/api/alerts/${id}/resolve`);
+  loadAlerts();
+}
+
+async function loadRules() {
+  const rules = await API.get("/api/alert-rules");
+  const tbody = document.getElementById("rules-tbody");
+  if (rules.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--color-text-dim);">No alert rules configured yet. Rules can be added from a sensor, wine, or camera detail page.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rules
+    .map(
+      (r) => `
+      <tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.domain)}</td>
+        <td style="font-family:var(--font-mono);font-size:12px;">${escapeHtml(r.condition_type)}</td>
+        <td><span class="badge ${r.severity === "critical" ? "past_peak" : "aging"}">${r.severity}</span></td>
+        <td>${r.enabled ? "Yes" : "No"}</td>
+      </tr>`
+    )
+    .join("");
+}
+
+loadAlerts();
+loadRules();
+</script>
+</body>
+</html>

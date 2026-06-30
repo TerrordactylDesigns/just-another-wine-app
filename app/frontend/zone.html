@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zone — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+    <div id="zone-alerts"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Zone</div>
+        <h1 id="zone-name">Loading…</h1>
+      </div>
+    </div>
+
+    <section style="margin-bottom: var(--space-6);">
+      <h2 style="margin-bottom: var(--space-4);">Climate</h2>
+      <div class="card-grid" id="sensor-cards"></div>
+    </section>
+
+    <section style="margin-bottom: var(--space-6);">
+      <h2 style="margin-bottom: var(--space-4);">Cameras</h2>
+      <div class="card-grid" id="camera-cards"></div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom: var(--space-4);">Bottles in this Zone</h2>
+      <div class="card" id="bottle-list"></div>
+    </section>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar(null);
+const zoneId = new URLSearchParams(window.location.search).get("id");
+
+async function loadZone() {
+  const zone = await API.get(`/api/zones/${zoneId}`);
+  document.getElementById("zone-name").textContent = zone.name;
+}
+
+async function loadSensors() {
+  const sensors = await API.get(`/api/sensors?zone_id=${zoneId}`);
+  const el = document.getElementById("sensor-cards");
+  if (sensors.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>No sensors assigned to this zone yet.</p></div>`;
+    return;
+  }
+  const cards = await Promise.all(
+    sensors.map(async (s) => {
+      let latest = null;
+      try {
+        latest = await API.get(`/api/sensors/${s.id}/readings/latest`);
+      } catch (_) {}
+      return `
+        <a href="sensor-detail.html?id=${s.id}" class="stat-card" style="display:block;color:inherit;">
+          <div class="stat-value" style="font-size:24px;">${latest ? latest.value : "—"} <span style="font-size:13px;color:var(--color-text-dim);">${s.unit || ""}</span></div>
+          <div class="stat-label">${escapeHtml(s.name)}</div>
+        </a>`;
+    })
+  );
+  el.innerHTML = cards.join("");
+}
+
+async function loadCameras() {
+  const cameras = await API.get(`/api/cameras?zone_id=${zoneId}`);
+  const el = document.getElementById("camera-cards");
+  if (cameras.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>No cameras assigned to this zone yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = cameras
+    .map(
+      (c) => `
+      <a href="camera-detail.html?id=${c.id}" class="card" style="display:block;color:inherit;">
+        <div style="background:var(--color-bg);border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:var(--space-3);overflow:hidden;">
+          <img src="${API.base}/api/cameras/${c.id}/snapshot" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
+        </div>
+        <h3 style="font-size:15px;">${escapeHtml(c.name)}</h3>
+        <p style="font-size:12px;color:var(--color-text-dim);margin-top:4px;">${c.enabled ? "Enabled" : "Disabled"}</p>
+      </a>`
+    )
+    .join("");
+}
+
+async function loadBottles() {
+  const items = await API.get(`/api/zones/${zoneId}/inventory`);
+  const el = document.getElementById("bottle-list");
+  if (items.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No bottles stored in this zone.</p>`;
+    return;
+  }
+  const rows = await Promise.all(
+    items.map(async (item) => {
+      const wine = await API.get(`/api/wines/${item.wine_id}`);
+      return `
+        <tr>
+          <td><a href="detail.html?id=${wine.id}">${escapeHtml(wine.producer)} — ${escapeHtml(wine.name)}</a></td>
+          <td>${wine.vintage || "—"}</td>
+          <td>${item.quantity}</td>
+          <td>${escapeHtml(item.location_notes || "—")}</td>
+        </tr>`;
+    })
+  );
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>Wine</th><th>Vintage</th><th>Qty</th><th>Location</th></tr></thead>
+      <tbody>${rows.join("")}</tbody>
+    </table>`;
+}
+
+async function loadZoneAlerts() {
+  const alerts = await API.get(`/api/alerts?resolved=false`);
+  const relevant = alerts.filter((a) => a.entity_type === "zone" && a.entity_id === parseInt(zoneId));
+  const el = document.getElementById("zone-alerts");
+  if (relevant.length === 0) return;
+  el.innerHTML = relevant
+    .map(
+      (a) => `<div class="banner ${a.severity === "critical" ? "critical" : "warning"}" style="margin-bottom:8px;">
+        <span><strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(a.message || "")}</span>
+      </div>`
+    )
+    .join("");
+}
+
+loadZone();
+loadSensors();
+loadCameras();
+loadBottles();
+loadZoneAlerts();
+</script>
+</body>
+</html>

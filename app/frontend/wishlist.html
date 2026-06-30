@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wishlist — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Wines</div>
+        <h1>Wishlist</h1>
+      </div>
+      <div class="page-actions">
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--color-text-dim);">
+          <input type="checkbox" id="show-fulfilled-toggle" onchange="loadWishlist()" style="width:auto;margin:0;" />
+          Show fulfilled
+        </label>
+        <button class="btn btn-accent" onclick="document.getElementById('add-modal').classList.add('open')">+ Add Wine</button>
+      </div>
+    </div>
+
+    <div class="card-grid" id="wishlist-cards">
+      <p style="color:var(--color-text-dim);">Loading…</p>
+    </div>
+  </main>
+</div>
+
+<!-- Add to wishlist modal -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Add to Wishlist</h3>
+      <button onclick="document.getElementById('add-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Producer</label><input type="text" id="w-producer" />
+    <label>Wine Name</label><input type="text" id="w-name" />
+    <label>Vintage</label><input type="number" id="w-vintage" />
+    <label>Region</label><input type="text" id="w-region" />
+    <label>Target Price</label><input type="number" id="w-price" step="0.01" />
+    <label>External Link</label><input type="text" id="w-url" />
+    <label>Notes</label><textarea id="w-notes"></textarea>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="addToWishlist()">Add to Wishlist</button>
+  </div>
+</div>
+
+<!-- Move to cellar modal -->
+<div class="modal-overlay" id="fulfill-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Move to Cellar</h3>
+      <button onclick="document.getElementById('fulfill-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <input type="hidden" id="fulfill-item-id" />
+    <label>Cellar</label>
+    <select id="fulfill-cellar" onchange="loadZonesForCellar()"></select>
+    <label>Zone</label>
+    <select id="fulfill-zone"></select>
+    <label>Quantity</label>
+    <input type="number" id="fulfill-qty" value="1" />
+    <label>Purchase Price (per bottle)</label>
+    <input type="number" id="fulfill-price" step="0.01" />
+    <label>Purchase Date</label>
+    <input type="date" id="fulfill-date" />
+    <label>Purchased From</label>
+    <input type="text" id="fulfill-from" />
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="confirmFulfill()">Confirm Move</button>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("wishlist");
+let cellarsCache = [];
+
+async function loadWishlist() {
+  const showFulfilled = document.getElementById("show-fulfilled-toggle").checked;
+  const items = await API.get(`/api/wishlist?show_fulfilled=${showFulfilled}`);
+  const el = document.getElementById("wishlist-cards");
+
+  if (items.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>Your wishlist is empty</h3><p>Add wines you're hoping to acquire.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = items
+    .map((item) => {
+      const linkLabel = externalLinkLabel(item.external_url);
+      return `
+      <div class="card">
+        <h3>${escapeHtml(item.producer)}</h3>
+        <p class="sub" style="color:var(--color-text-dim);">${escapeHtml(item.name)} ${item.vintage ? "· " + item.vintage : ""}</p>
+        <p style="font-size:13px;color:var(--color-text-dim);margin-top:4px;">${escapeHtml(item.region || "")}</p>
+        ${item.target_price ? `<p style="font-size:13px;margin-top:4px;">Target: $${item.target_price.toFixed(2)}</p>` : ""}
+        ${item.fulfilled_at ? `<p style="margin-top:var(--space-3);"><span class="badge ready">Fulfilled</span> <a href="detail.html?id=${item.fulfilled_wine_id}">View wine →</a></p>` : ""}
+        <div style="display:flex;gap:8px;margin-top:var(--space-3);flex-wrap:wrap;">
+          ${item.external_url ? `<a class="external-link-icon" href="${escapeHtml(item.external_url)}" target="_blank">↗ ${linkLabel}</a>` : ""}
+          ${!item.fulfilled_at ? `<button class="btn btn-sm btn-accent" onclick="openFulfillModal(${item.id})">Move to Cellar</button>` : ""}
+          ${!item.fulfilled_at ? `<button class="btn btn-sm btn-danger" onclick="deleteWishlistItem(${item.id})">Remove</button>` : ""}
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+async function addToWishlist() {
+  await API.post("/api/wishlist", {
+    producer: document.getElementById("w-producer").value,
+    name: document.getElementById("w-name").value,
+    vintage: parseInt(document.getElementById("w-vintage").value) || null,
+    region: document.getElementById("w-region").value,
+    target_price: parseFloat(document.getElementById("w-price").value) || null,
+    external_url: document.getElementById("w-url").value,
+    notes: document.getElementById("w-notes").value,
+  });
+  document.getElementById("add-modal").classList.remove("open");
+  loadWishlist();
+}
+
+async function deleteWishlistItem(id) {
+  if (!confirm("Remove this item from your wishlist?")) return;
+  await API.del(`/api/wishlist/${id}`);
+  loadWishlist();
+}
+
+async function openFulfillModal(itemId) {
+  document.getElementById("fulfill-item-id").value = itemId;
+  cellarsCache = await API.get("/api/cellars");
+  const sel = document.getElementById("fulfill-cellar");
+  sel.innerHTML = cellarsCache.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  await loadZonesForCellar();
+  document.getElementById("fulfill-modal").classList.add("open");
+}
+
+async function loadZonesForCellar() {
+  const cellarId = document.getElementById("fulfill-cellar").value;
+  const zones = await API.get(`/api/zones?cellar_id=${cellarId}`);
+  document.getElementById("fulfill-zone").innerHTML = zones
+    .map((z) => `<option value="${z.id}">${escapeHtml(z.name)}</option>`)
+    .join("");
+}
+
+async function confirmFulfill() {
+  const itemId = document.getElementById("fulfill-item-id").value;
+  const wine = await API.post(`/api/wishlist/${itemId}/fulfill`, {
+    zone_id: parseInt(document.getElementById("fulfill-zone").value),
+    quantity: parseInt(document.getElementById("fulfill-qty").value) || 1,
+    purchase_price: parseFloat(document.getElementById("fulfill-price").value) || null,
+    purchase_date: document.getElementById("fulfill-date").value || null,
+    purchased_from: document.getElementById("fulfill-from").value,
+  });
+  document.getElementById("fulfill-modal").classList.remove("open");
+  window.location.href = `detail.html?id=${wine.id}`;
+}
+
+loadWishlist();
+</script>
+</body>
+</html>

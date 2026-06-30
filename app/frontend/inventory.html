@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inventory — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Wines</div>
+        <h1>Inventory</h1>
+      </div>
+      <div class="page-actions">
+        <input type="text" id="search-input" placeholder="Search producer or name…" style="width:220px;margin-bottom:0;" oninput="renderTable()" />
+        <button class="btn btn-accent" onclick="window.location.href='detail.html'">+ Add Wine</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table id="inventory-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Producer</th>
+            <th>Wine</th>
+            <th>Vintage</th>
+            <th>Region</th>
+            <th>Bottles</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="inventory-tbody">
+          <tr><td colspan="8" style="color:var(--color-text-dim);">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("inventory");
+let allWines = [];
+
+async function loadWines() {
+  const wines = await API.get("/api/wines");
+  allWines = await Promise.all(
+    wines.map(async (w) => {
+      const inv = await API.get(`/api/wines/${w.id}/inventory`);
+      const total = inv.reduce((sum, i) => sum + i.quantity, 0);
+      let primaryImg = null;
+      try {
+        const imgs = await API.get(`/api/wines/${w.id}/images`);
+        primaryImg = imgs.find((i) => i.is_primary) || imgs[0];
+      } catch (_) {}
+      return { ...w, totalBottles: total, primaryImg };
+    })
+  );
+  renderTable();
+}
+
+function renderTable() {
+  const term = document.getElementById("search-input").value.toLowerCase();
+  const filtered = allWines.filter(
+    (w) => w.producer.toLowerCase().includes(term) || w.name.toLowerCase().includes(term)
+  );
+  const tbody = document.getElementById("inventory-tbody");
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>No wines found</h3><p>Try a different search, or add a new wine.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered
+    .map((w) => {
+      const status = wineStatus(w);
+      const linkLabel = externalLinkLabel(w.external_url);
+      return `
+      <tr>
+        <td>
+          ${
+            w.primaryImg
+              ? `<img class="wine-thumb" src="${API.imageUrl(w.primaryImg.id, true)}" />`
+              : `<div class="wine-thumb-placeholder"></div>`
+          }
+        </td>
+        <td><a href="detail.html?id=${w.id}">${escapeHtml(w.producer)}</a></td>
+        <td>${escapeHtml(w.name)}</td>
+        <td>${w.vintage || "—"}</td>
+        <td>${escapeHtml(w.region || "—")}</td>
+        <td>${w.totalBottles}</td>
+        <td>${statusBadge(status)}</td>
+        <td>${
+          w.external_url
+            ? `<a class="external-link-icon" href="${escapeHtml(w.external_url)}" target="_blank" title="${linkLabel}">↗</a>`
+            : ""
+        }</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+loadWines();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Camera — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Camera</div>
+        <h1 id="camera-name">Loading…</h1>
+        <p id="camera-status" style="color:var(--color-text-dim);">Connecting…</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:var(--space-6);padding:0;overflow:hidden;background:#000;">
+      <video id="video-player" style="width:100%;display:none;" controls autoplay muted playsinline></video>
+      <img id="snapshot-img" style="width:100%;display:none;" />
+    </div>
+
+    <div class="card" style="margin-bottom:var(--space-6);">
+      <h2 style="margin-bottom:var(--space-4);">Snapshot History</h2>
+      <div id="snapshot-history" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:var(--space-4);">Health History</h2>
+      <div id="health-alerts"></div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/player.js"></script>
+<script>
+renderSidebar("cameras");
+const cameraId = new URLSearchParams(window.location.search).get("id");
+
+async function loadCamera() {
+  const c = await API.get(`/api/cameras/${cameraId}`);
+  document.getElementById("camera-name").textContent = c.name;
+
+  const video = document.getElementById("video-player");
+  const img = document.getElementById("snapshot-img");
+  const status = document.getElementById("camera-status");
+
+  await Player.loadCamera(cameraId, video, img, status);
+}
+
+async function loadSnapshotHistory() {
+  const snaps = await API.get(`/api/cameras/${cameraId}/snapshot/history`);
+  const el = document.getElementById("snapshot-history");
+  if (snaps.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No snapshots saved yet.</p>`;
+    return;
+  }
+  el.innerHTML = snaps
+    .map((s) => `<img src="${API.base}${s.url}" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border);" title="${fmtDate(s.captured_at)}" />`)
+    .join("");
+}
+
+async function loadHealthAlerts() {
+  const alerts = await API.get(`/api/alerts?limit=30`);
+  const relevant = alerts.filter((a) => a.entity_type === "camera" && a.entity_id === parseInt(cameraId));
+  const el = document.getElementById("health-alerts");
+  if (relevant.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No health issues recorded.</p>`;
+    return;
+  }
+  el.innerHTML = `
+    <table><thead><tr><th>Title</th><th>Triggered</th><th>Status</th></tr></thead>
+    <tbody>${relevant.map((a) => `<tr><td>${escapeHtml(a.title)}</td><td>${fmtDate(a.triggered_at)}</td><td>${a.resolved_at ? "Resolved" : "Active"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+loadCamera();
+loadSnapshotHistory();
+loadHealthAlerts();
+</script>
+</body>
+</html>

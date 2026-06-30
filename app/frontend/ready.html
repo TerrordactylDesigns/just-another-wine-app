@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ready to Drink — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Wines</div>
+        <h1>Ready to Drink</h1>
+        <p style="color:var(--color-text-dim);">Wines currently within their drinking window.</p>
+      </div>
+      <div class="page-actions">
+        <select id="zone-filter" onchange="loadWines()" style="width:200px;margin-bottom:0;">
+          <option value="">All zones</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card-grid" id="wine-cards">
+      <p style="color:var(--color-text-dim);">Loading…</p>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("ready");
+
+async function loadZoneOptions() {
+  const zones = await API.get("/api/zones");
+  const sel = document.getElementById("zone-filter");
+  zones.forEach((z) => {
+    const opt = document.createElement("option");
+    opt.value = z.id;
+    opt.textContent = z.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadWines() {
+  const zoneId = document.getElementById("zone-filter").value;
+  let url = "/api/wines?status=ready";
+  if (zoneId) url += `&zone_id=${zoneId}`;
+  const wines = await API.get(url);
+  const el = document.getElementById("wine-cards");
+
+  if (wines.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>Nothing ready right now</h3><p>Wines will appear here once they enter their drinking window.</p></div>`;
+    return;
+  }
+
+  const cards = await Promise.all(
+    wines.map(async (w) => {
+      let primaryImg = null;
+      try {
+        const imgs = await API.get(`/api/wines/${w.id}/images`);
+        primaryImg = imgs.find((i) => i.is_primary) || imgs[0];
+      } catch (_) {}
+      const linkLabel = externalLinkLabel(w.external_url);
+      return `
+        <a href="detail.html?id=${w.id}" class="card" style="display:block;color:inherit;">
+          <div class="wine-row" style="margin-bottom:var(--space-3);">
+            ${primaryImg ? `<img class="wine-thumb" src="${API.imageUrl(primaryImg.id, true)}" />` : `<div class="wine-thumb-placeholder"></div>`}
+            <div class="wine-meta">
+              <span class="producer">${escapeHtml(w.producer)}</span>
+              <span class="sub">${escapeHtml(w.name)} ${w.vintage ? "· " + w.vintage : ""}</span>
+            </div>
+          </div>
+          <p style="font-size:13px;color:var(--color-text-dim);">${escapeHtml(w.region || "")}</p>
+          ${w.external_url ? `<span class="external-link-icon">↗ ${linkLabel}</span>` : ""}
+        </a>`;
+    })
+  );
+  el.innerHTML = cards.join("");
+}
+
+loadZoneOptions();
+loadWines();
+</script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wine Detail — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+    <div id="wine-alerts"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Wine</div>
+        <h1 id="wine-title">New Wine</h1>
+      </div>
+      <div class="page-actions">
+        <a id="external-link-btn" class="btn" href="#" target="_blank" style="display:none;"></a>
+        <button class="btn btn-primary" onclick="saveWine()">Save</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:var(--space-6);">
+      <div>
+        <div id="gallery-container"></div>
+        <div style="margin-top:var(--space-3);">
+          <label>Add Image (upload)</label>
+          <input type="file" id="image-upload-input" accept="image/*" />
+          <button class="btn btn-sm" onclick="uploadImage()">Upload</button>
+        </div>
+        <div style="margin-top:var(--space-2);">
+          <label>Or Add Image (URL)</label>
+          <input type="text" id="image-url-input" placeholder="https://…" />
+          <button class="btn btn-sm" onclick="uploadImageUrl()">Add from URL</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom:var(--space-5);">
+          <h2 style="margin-bottom:var(--space-4);">Details</h2>
+          <div class="field-row">
+            <div><label>Producer</label><input type="text" id="f-producer" /></div>
+            <div><label>Wine Name</label><input type="text" id="f-name" /></div>
+            <div><label>Vintage</label><input type="number" id="f-vintage" /></div>
+            <div><label>Region</label><input type="text" id="f-region" /></div>
+          </div>
+          <label>Grapes</label>
+          <input type="text" id="f-grapes" placeholder="e.g. Cabernet Sauvignon, Merlot" />
+          <label>Tasting Notes</label>
+          <textarea id="f-notes"></textarea>
+          <div class="field-row">
+            <div><label>Drink From (year)</label><input type="number" id="f-drink-from" /></div>
+            <div><label>Drink Until (year)</label><input type="number" id="f-drink-until" /></div>
+          </div>
+          <label>External Link (Vivino, Wine.com, etc.)</label>
+          <input type="text" id="f-external-url" placeholder="https://…" />
+        </div>
+
+        <div class="card" style="margin-bottom:var(--space-5);">
+          <h2 style="margin-bottom:var(--space-4);">Inventory</h2>
+          <div id="inventory-section"><p style="color:var(--color-text-dim);">Save the wine first to manage inventory.</p></div>
+        </div>
+
+        <div class="card" style="margin-bottom:var(--space-5);">
+          <h2 style="margin-bottom:var(--space-4);">Purchase History</h2>
+          <div id="purchase-section"></div>
+        </div>
+
+        <div class="card">
+          <h2 style="margin-bottom:var(--space-4);">Consumption History</h2>
+          <div id="consumption-section"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/gallery.js"></script>
+<script>
+renderSidebar("inventory");
+const wineId = new URLSearchParams(window.location.search).get("id");
+
+async function loadWine() {
+  if (!wineId) {
+    document.getElementById("gallery-container").innerHTML = "";
+    Gallery.render(document.getElementById("gallery-container"), []);
+    return;
+  }
+  const w = await API.get(`/api/wines/${wineId}`);
+  document.getElementById("wine-title").textContent = `${w.producer} — ${w.name}`;
+  document.getElementById("f-producer").value = w.producer || "";
+  document.getElementById("f-name").value = w.name || "";
+  document.getElementById("f-vintage").value = w.vintage || "";
+  document.getElementById("f-region").value = w.region || "";
+  document.getElementById("f-grapes").value = w.grapes || "";
+  document.getElementById("f-notes").value = w.tasting_notes || "";
+  document.getElementById("f-drink-from").value = w.drink_from || "";
+  document.getElementById("f-drink-until").value = w.drink_until || "";
+  document.getElementById("f-external-url").value = w.external_url || "";
+
+  if (w.external_url) {
+    const btn = document.getElementById("external-link-btn");
+    btn.style.display = "inline-flex";
+    btn.href = w.external_url;
+    btn.textContent = externalLinkLabel(w.external_url);
+  }
+
+  const images = await API.get(`/api/wines/${wineId}/images`);
+  Gallery.render(document.getElementById("gallery-container"), images);
+
+  loadInventorySection();
+  loadPurchaseSection();
+  loadConsumptionSection();
+  loadWineAlerts();
+}
+
+async function saveWine() {
+  const payload = {
+    producer: document.getElementById("f-producer").value,
+    name: document.getElementById("f-name").value,
+    vintage: parseInt(document.getElementById("f-vintage").value) || null,
+    region: document.getElementById("f-region").value,
+    grapes: document.getElementById("f-grapes").value,
+    tasting_notes: document.getElementById("f-notes").value,
+    drink_from: parseInt(document.getElementById("f-drink-from").value) || null,
+    drink_until: parseInt(document.getElementById("f-drink-until").value) || null,
+    external_url: document.getElementById("f-external-url").value,
+  };
+
+  if (!payload.producer || !payload.name) {
+    alert("Producer and wine name are required.");
+    return;
+  }
+
+  if (wineId) {
+    await API.put(`/api/wines/${wineId}`, payload);
+    loadWine();
+  } else {
+    const created = await API.post("/api/wines", payload);
+    window.location.href = `detail.html?id=${created.id}`;
+  }
+}
+
+async function loadInventorySection() {
+  const items = await API.get(`/api/wines/${wineId}/inventory`);
+  const zones = await API.get("/api/zones");
+  const el = document.getElementById("inventory-section");
+
+  const rows = items
+    .map((item) => {
+      const zone = zones.find((z) => z.id === item.zone_id);
+      return `<tr><td>${zone ? escapeHtml(zone.name) : "Zone " + item.zone_id}</td><td>${item.quantity}</td><td>${escapeHtml(item.location_notes || "—")}</td></tr>`;
+    })
+    .join("");
+
+  el.innerHTML = `
+    <table><thead><tr><th>Zone</th><th>Qty</th><th>Location Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="3" style="color:var(--color-text-dim);">No bottles tracked yet.</td></tr>'}</tbody></table>
+    <div style="margin-top:var(--space-4);">
+      <div class="field-row">
+        <div><label>Zone</label><select id="add-inv-zone">${zones.map((z) => `<option value="${z.id}">${escapeHtml(z.name)}</option>`).join("")}</select></div>
+        <div><label>Quantity</label><input type="number" id="add-inv-qty" value="1" /></div>
+      </div>
+      <button class="btn btn-sm" onclick="addInventory()">Add Bottles</button>
+    </div>`;
+}
+
+async function addInventory() {
+  await API.post("/api/inventory", {
+    wine_id: parseInt(wineId),
+    zone_id: parseInt(document.getElementById("add-inv-zone").value),
+    quantity: parseInt(document.getElementById("add-inv-qty").value) || 1,
+  });
+  loadInventorySection();
+}
+
+async function loadPurchaseSection() {
+  const purchases = await API.get(`/api/wines/${wineId}/purchases`);
+  const el = document.getElementById("purchase-section");
+  const rows = purchases
+    .map(
+      (p) =>
+        `<tr><td>${fmtDate(p.purchase_date)}</td><td>${p.quantity}</td><td>${p.price_per_bottle ? "$" + p.price_per_bottle.toFixed(2) : "—"}</td><td>${escapeHtml(p.purchased_from || "—")}</td></tr>`
+    )
+    .join("");
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Qty</th><th>Price/Bottle</th><th>From</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="color:var(--color-text-dim);">No purchases logged.</td></tr>'}</tbody></table>
+    <div style="margin-top:var(--space-4);" class="field-row">
+      <div><label>Date</label><input type="date" id="p-date" /></div>
+      <div><label>Qty</label><input type="number" id="p-qty" value="1" /></div>
+      <div><label>Price/Bottle</label><input type="number" id="p-price" step="0.01" /></div>
+      <div><label>From</label><input type="text" id="p-from" /></div>
+    </div>
+    <button class="btn btn-sm" onclick="addPurchase()">Log Purchase</button>`;
+}
+
+async function addPurchase() {
+  const qty = parseInt(document.getElementById("p-qty").value) || 1;
+  const price = parseFloat(document.getElementById("p-price").value) || null;
+  await API.post("/api/purchases", {
+    wine_id: parseInt(wineId),
+    quantity: qty,
+    price_per_bottle: price,
+    total_price: price ? price * qty : null,
+    purchased_from: document.getElementById("p-from").value,
+    purchase_date: document.getElementById("p-date").value || null,
+  });
+  loadPurchaseSection();
+}
+
+async function loadConsumptionSection() {
+  const entries = await API.get(`/api/wines/${wineId}/consumed`);
+  const el = document.getElementById("consumption-section");
+  const rows = entries
+    .map(
+      (c) =>
+        `<tr><td>${fmtDate(c.consumed_at)}</td><td>${c.quantity}</td><td>${escapeHtml(c.occasion || "—")}</td><td>${c.rating || "—"}</td></tr>`
+    )
+    .join("");
+  el.innerHTML = `
+    <table><thead><tr><th>Date</th><th>Qty</th><th>Occasion</th><th>Rating</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="color:var(--color-text-dim);">No consumption logged.</td></tr>'}</tbody></table>
+    <div style="margin-top:var(--space-4);" class="field-row">
+      <div><label>Qty</label><input type="number" id="c-qty" value="1" /></div>
+      <div><label>Occasion</label><input type="text" id="c-occasion" /></div>
+      <div><label>Rating (1-100)</label><input type="number" id="c-rating" /></div>
+    </div>
+    <button class="btn btn-sm" onclick="addConsumption()">Log Consumption</button>`;
+}
+
+async function addConsumption() {
+  await API.post("/api/consumed", {
+    wine_id: parseInt(wineId),
+    quantity: parseInt(document.getElementById("c-qty").value) || 1,
+    occasion: document.getElementById("c-occasion").value,
+    rating: parseInt(document.getElementById("c-rating").value) || null,
+  });
+  loadConsumptionSection();
+  loadInventorySection();
+}
+
+async function uploadImage() {
+  const input = document.getElementById("image-upload-input");
+  if (!input.files[0]) return;
+  const fd = new FormData();
+  fd.append("file", input.files[0]);
+  await API.postForm(`/api/wines/${wineId}/images`, fd);
+  loadWine();
+}
+
+async function uploadImageUrl() {
+  const url = document.getElementById("image-url-input").value.trim();
+  if (!url) return;
+  const fd = new FormData();
+  fd.append("url", url);
+  await API.postForm(`/api/wines/${wineId}/images`, fd);
+  loadWine();
+}
+
+async function loadWineAlerts() {
+  const alerts = await API.get(`/api/alerts?resolved=false`);
+  const relevant = alerts.filter((a) => a.entity_type === "wine" && a.entity_id === parseInt(wineId));
+  const el = document.getElementById("wine-alerts");
+  if (relevant.length === 0) return;
+  el.innerHTML = relevant
+    .map(
+      (a) => `<div class="banner ${a.severity === "critical" ? "critical" : "warning"}" style="margin-bottom:8px;">
+        <span><strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(a.message || "")}</span>
+      </div>`
+    )
+    .join("");
+}
+
+loadWine();
+</script>
+</body>
+</html>

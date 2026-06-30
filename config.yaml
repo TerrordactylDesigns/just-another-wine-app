@@ -1,0 +1,35 @@
+name: "Just Another Wine App"
+version: "1.0.0"
+slug: "just_another_wine_app"
+description: "Track your wine cellar — bottles, zones, climate sensors, cameras, and alerts."
+url: "https://github.com/TerrordactylDesigns/just-another-wine-app"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+startup: application
+boot: auto
+panel_icon: mdi:glass-wine
+panel_title: "Just Another Wine App"
+panel_admin: false
+ingress: true
+ingress_port: 8099
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: "Web UI (used internally by ingress)"
+options:
+  log_level: "info"
+  snapshot_retention_days: 30
+  readings_retention_days: 90
+  ffmpeg_path: "/usr/bin/ffmpeg"
+schema:
+  log_level: "list(debug|info|warning|error)"
+  snapshot_retention_days: "int(7,365)"
+  readings_retention_days: "int(30,730)"
+  ffmpeg_path: "str"
+map:
+  - config:rw
+  - media:rw
+backup: hot

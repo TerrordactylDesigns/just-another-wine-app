@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Overview</div>
+        <h1>Dashboard</h1>
+      </div>
+    </div>
+
+    <section class="card-grid" id="summary-stats" style="margin-bottom: var(--space-6);">
+      <div class="card"><p style="color:var(--color-text-dim)">Loading summary…</p></div>
+    </section>
+
+    <section style="margin-bottom: var(--space-6);">
+      <h2 style="margin-bottom: var(--space-4);">Cellars</h2>
+      <div class="card-grid" id="cellar-list"></div>
+    </section>
+
+    <section>
+      <h2 style="margin-bottom: var(--space-4);">Recent Alerts</h2>
+      <div class="card" id="recent-alerts">
+        <p style="color:var(--color-text-dim)">Loading…</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("index");
+
+async function loadSummary() {
+  const s = await API.get("/api/summary");
+  const el = document.getElementById("summary-stats");
+  el.innerHTML = `
+    <div class="stat-card accent">
+      <div class="stat-value">${s.total_bottles}</div>
+      <div class="stat-label">Total Bottles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${s.total_wines}</div>
+      <div class="stat-label">Distinct Wines</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${s.total_cellars}</div>
+      <div class="stat-label">Cellars</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-value"><a href="ready.html" style="color:inherit;">${s.wines_ready}</a></div>
+      <div class="stat-label">Ready to Drink</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><a href="aging.html" style="color:inherit;">${s.wines_aging}</a></div>
+      <div class="stat-label">Currently Aging</div>
+    </div>
+    <div class="stat-card critical">
+      <div class="stat-value">${s.wines_past_peak}</div>
+      <div class="stat-label">Past Peak</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-value">${s.alerts_critical + s.alerts_warning}</div>
+      <div class="stat-label">Active Alerts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value"><a href="wishlist.html" style="color:inherit;">${s.wishlist_count}</a></div>
+      <div class="stat-label">Wishlist Items</div>
+    </div>
+  `;
+}
+
+async function loadCellars() {
+  const cellars = await API.get("/api/cellars");
+  const el = document.getElementById("cellar-list");
+  if (cellars.length === 0) {
+    el.innerHTML = `<div class="empty-state"><h3>No cellars yet</h3><p>Add your first cellar to get started.</p></div>`;
+    return;
+  }
+  const cards = await Promise.all(
+    cellars.map(async (c) => {
+      const zones = await API.get(`/api/cellars/${c.id}/zones`);
+      return `
+        <a href="cellar.html?id=${c.id}" class="card" style="display:block;color:inherit;">
+          <h3>${escapeHtml(c.name)}</h3>
+          <p class="sub" style="color:var(--color-text-dim);margin-top:4px;">${escapeHtml(c.location || "")}</p>
+          <p style="margin-top:var(--space-3);font-size:13px;color:var(--color-text-dim);">${zones.length} zone${zones.length !== 1 ? "s" : ""}</p>
+        </a>`;
+    })
+  );
+  el.innerHTML = cards.join("");
+}
+
+async function loadRecentAlerts() {
+  const alerts = await API.get("/api/alerts?resolved=false&limit=8");
+  const el = document.getElementById("recent-alerts");
+  if (alerts.length === 0) {
+    el.innerHTML = `<p style="color:var(--color-text-dim);">No active alerts. Everything looks good.</p>`;
+    return;
+  }
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>Severity</th><th>Title</th><th>Triggered</th></tr></thead>
+      <tbody>
+        ${alerts
+          .map(
+            (a) => `
+          <tr>
+            <td><span class="badge ${a.severity === "critical" ? "past_peak" : "aging"}">${a.severity}</span></td>
+            <td>${escapeHtml(a.title)}</td>
+            <td>${fmtDate(a.triggered_at)}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    <div style="margin-top:var(--space-3);"><a href="alerts.html">View all alerts →</a></div>
+  `;
+}
+
+loadSummary();
+loadCellars();
+loadRecentAlerts();
+</script>
+</body>
+</html>

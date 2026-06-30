@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sensors — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Monitoring</div>
+        <h1>Sensors</h1>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-accent" onclick="document.getElementById('add-modal').classList.add('open')">+ Add Sensor</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Zone</th><th>Type</th><th>Latest</th><th>Status</th><th></th></tr></thead>
+        <tbody id="sensor-tbody"><tr><td colspan="6" style="color:var(--color-text-dim);">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Sensor</h3>
+      <button onclick="document.getElementById('add-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Name</label><input type="text" id="s-name" placeholder="e.g. Rack B Thermometer" />
+    <label>Zone</label><select id="s-zone"></select>
+    <label>Sensor Type</label><select id="s-type"></select>
+    <label>Manufacturer</label><input type="text" id="s-manufacturer" />
+    <label>Model</label><input type="text" id="s-model" />
+    <label>Unit (optional override)</label><input type="text" id="s-unit" placeholder="defaults to type's unit" />
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="createSensor()">Add Sensor</button>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("sensors");
+let sensorTypesCache = [];
+
+async function loadModalOptions() {
+  const zones = await API.get("/api/zones");
+  document.getElementById("s-zone").innerHTML = zones.map((z) => `<option value="${z.id}">${escapeHtml(z.name)}</option>`).join("");
+  sensorTypesCache = await API.get("/api/sensor-types");
+  document.getElementById("s-type").innerHTML = sensorTypesCache.map((t) => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join("");
+}
+
+async function createSensor() {
+  const typeId = parseInt(document.getElementById("s-type").value);
+  const type = sensorTypesCache.find((t) => t.id === typeId);
+  await API.post("/api/sensors", {
+    name: document.getElementById("s-name").value,
+    zone_id: parseInt(document.getElementById("s-zone").value),
+    sensor_type_id: typeId,
+    manufacturer: document.getElementById("s-manufacturer").value,
+    model: document.getElementById("s-model").value,
+    unit: document.getElementById("s-unit").value || (type ? type.default_unit : null),
+    active: true,
+  });
+  document.getElementById("add-modal").classList.remove("open");
+  loadSensors();
+}
+
+async function loadSensors() {
+  const sensors = await API.get("/api/sensors");
+  const zones = await API.get("/api/zones");
+  const types = await API.get("/api/sensor-types");
+  const tbody = document.getElementById("sensor-tbody");
+
+  if (sensors.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><h3>No sensors yet</h3><p>Add a sensor to start tracking climate data.</p></div></td></tr>`;
+    return;
+  }
+
+  const rows = await Promise.all(
+    sensors.map(async (s) => {
+      const zone = zones.find((z) => z.id === s.zone_id);
+      const type = types.find((t) => t.id === s.sensor_type_id);
+      let latest = null;
+      try { latest = await API.get(`/api/sensors/${s.id}/readings/latest`); } catch (_) {}
+      return `
+        <tr>
+          <td><a href="sensor-detail.html?id=${s.id}">${escapeHtml(s.name)}</a></td>
+          <td>${zone ? escapeHtml(zone.name) : "—"}</td>
+          <td>${type ? escapeHtml(type.label) : "—"}</td>
+          <td>${latest ? latest.value + " " + (s.unit || "") : "No data"}</td>
+          <td>${s.active ? '<span class="badge ready">Active</span>' : '<span class="badge past_peak">Inactive</span>'}</td>
+          <td><button class="btn btn-sm" onclick="toggleSensor(${s.id}, ${!s.active})">${s.active ? "Disable" : "Enable"}</button></td>
+        </tr>`;
+    })
+  );
+  tbody.innerHTML = rows.join("");
+}
+
+async function toggleSensor(id, newState) {
+  const sensor = await API.get(`/api/sensors/${id}`);
+  await API.put(`/api/sensors/${id}`, { ...sensor, active: newState });
+  loadSensors();
+}
+
+loadModalOptions();
+loadSensors();
+</script>
+</body>
+</html>

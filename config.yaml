@@ -12,13 +12,9 @@ startup: application
 boot: auto
 panel_icon: mdi:glass-wine
 panel_title: "Just Another Wine App"
-panel_admin: false
 ingress: true
 ingress_port: 8099
-ports:
-  8099/tcp: 8099
-ports_description:
-  8099/tcp: "Web UI (used internally by ingress)"
+panel_admin: false
 options:
   log_level: "info"
   snapshot_retention_days: 30

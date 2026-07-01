@@ -153,22 +153,102 @@ async function loadInventorySection() {
   const zones = await API.get("/api/zones");
   const el = document.getElementById("inventory-section");
 
-  const rows = items
-    .map((item) => {
-      const zone = zones.find((z) => z.id === item.zone_id);
-      return `<tr><td>${zone ? escapeHtml(zone.name) : "Zone " + item.zone_id}</td><td>${item.quantity}</td><td>${escapeHtml(item.location_notes || "—")}</td></tr>`;
-    })
-    .join("");
+  const totalBottles = items.reduce((sum, i) => sum + i.quantity, 0);
+
+  const rows = items.map((item) => {
+    const zone = zones.find((z) => z.id === item.zone_id);
+    return `
+      <tr id="inv-row-${item.id}">
+        <td>${zone ? escapeHtml(zone.name) : "Zone " + item.zone_id}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn btn-sm" onclick="adjustQty(${item.id}, ${item.wine_id}, ${item.zone_id}, ${item.quantity}, -1)" style="padding:2px 8px;font-size:16px;line-height:1;">−</button>
+            <input type="number" id="qty-${item.id}" value="${item.quantity}" min="0"
+              style="width:60px;text-align:center;margin-bottom:0;"
+              onchange="saveQty(${item.id}, ${item.wine_id}, ${item.zone_id})" />
+            <button class="btn btn-sm" onclick="adjustQty(${item.id}, ${item.wine_id}, ${item.zone_id}, ${item.quantity}, 1)" style="padding:2px 8px;font-size:16px;line-height:1;">+</button>
+          </div>
+        </td>
+        <td>
+          <input type="text" id="notes-${item.id}" value="${escapeHtml(item.location_notes || "")}"
+            placeholder="e.g. Rack B, Shelf 3"
+            style="margin-bottom:0;"
+            onblur="saveNotes(${item.id}, ${item.wine_id}, ${item.zone_id})" />
+        </td>
+        <td>
+          <button class="btn btn-sm btn-danger" onclick="removeInventoryRow(${item.id})">Remove</button>
+        </td>
+      </tr>`;
+  }).join("");
 
   el.innerHTML = `
-    <table><thead><tr><th>Zone</th><th>Qty</th><th>Location Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="3" style="color:var(--color-text-dim);">No bottles tracked yet.</td></tr>'}</tbody></table>
-    <div style="margin-top:var(--space-4);">
-      <div class="field-row">
-        <div><label>Zone</label><select id="add-inv-zone">${zones.map((z) => `<option value="${z.id}">${escapeHtml(z.name)}</option>`).join("")}</select></div>
-        <div><label>Quantity</label><input type="number" id="add-inv-qty" value="1" /></div>
+    <p style="font-size:13px;color:var(--color-text-dim);margin-bottom:var(--space-3);">
+      Total: <strong style="color:var(--color-text);">${totalBottles} bottle${totalBottles !== 1 ? "s" : ""}</strong>
+    </p>
+    <table style="margin-bottom:var(--space-4);">
+      <thead><tr><th>Zone</th><th>Qty</th><th>Location Notes</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" style="color:var(--color-text-dim);">No bottles tracked yet.</td></tr>`}</tbody>
+    </table>
+    <details style="margin-top:var(--space-2);">
+      <summary style="cursor:pointer;font-size:13px;color:var(--color-accent-bright);user-select:none;">+ Add bottles to a zone</summary>
+      <div style="margin-top:var(--space-3);">
+        <div class="field-row">
+          <div><label>Zone</label><select id="add-inv-zone">${zones.map((z) => `<option value="${z.id}">${escapeHtml(z.name)}</option>`).join("")}</select></div>
+          <div><label>Quantity</label><input type="number" id="add-inv-qty" value="1" min="1" /></div>
+          <div><label>Location Notes</label><input type="text" id="add-inv-notes" placeholder="Rack B, Shelf 3" /></div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="addInventory()">Add Bottles</button>
       </div>
-      <button class="btn btn-sm" onclick="addInventory()">Add Bottles</button>
-    </div>`;
+    </details>`;
+}
+
+async function adjustQty(itemId, wineId, zoneId, currentQty, delta) {
+  const newQty = Math.max(0, currentQty + delta);
+  document.getElementById(`qty-${itemId}`).value = newQty;
+  const notes = document.getElementById(`notes-${itemId}`)?.value || "";
+  await API.put(`/api/inventory/${itemId}`, {
+    wine_id: wineId,
+    zone_id: zoneId,
+    quantity: newQty,
+    location_notes: notes,
+    condition: "good",
+  });
+  loadInventorySection();
+}
+
+async function saveQty(itemId, wineId, zoneId) {
+  const qty = parseInt(document.getElementById(`qty-${itemId}`).value) || 0;
+  const notes = document.getElementById(`notes-${itemId}`)?.value || "";
+  const items = await API.get(`/api/wines/${wineId}/inventory`);
+  const item = items.find(i => i.id === itemId);
+  await API.put(`/api/inventory/${itemId}`, {
+    wine_id: wineId,
+    zone_id: zoneId,
+    quantity: qty,
+    location_notes: notes,
+    condition: item?.condition || "good",
+  });
+  loadInventorySection();
+}
+
+async function saveNotes(itemId, wineId, zoneId) {
+  const notes = document.getElementById(`notes-${itemId}`).value;
+  const qty = parseInt(document.getElementById(`qty-${itemId}`).value) || 0;
+  const items = await API.get(`/api/wines/${wineId}/inventory`);
+  const item = items.find(i => i.id === itemId);
+  await API.put(`/api/inventory/${itemId}`, {
+    wine_id: wineId,
+    zone_id: zoneId,
+    quantity: qty,
+    location_notes: notes,
+    condition: item?.condition || "good",
+  });
+}
+
+async function removeInventoryRow(itemId) {
+  if (!confirm("Remove this inventory record? This won't affect consumption history.")) return;
+  await API.del(`/api/inventory/${itemId}`);
+  loadInventorySection();
 }
 
 async function addInventory() {
@@ -176,6 +256,7 @@ async function addInventory() {
     wine_id: parseInt(wineId),
     zone_id: parseInt(document.getElementById("add-inv-zone").value),
     quantity: parseInt(document.getElementById("add-inv-qty").value) || 1,
+    location_notes: document.getElementById("add-inv-notes").value,
   });
   loadInventorySection();
 }

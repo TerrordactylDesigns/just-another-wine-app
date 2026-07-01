@@ -28,6 +28,14 @@ def add_inventory(data: schemas.BottleInventoryCreate, db: Session = Depends(get
     return item
 
 
+@inventory_router.get("/{item_id}", response_model=schemas.BottleInventoryOut)
+def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(models.BottleInventory).filter(models.BottleInventory.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory record not found")
+    return item
+
+
 @inventory_router.put("/{item_id}", response_model=schemas.BottleInventoryOut)
 def update_inventory(item_id: int, data: schemas.BottleInventoryUpdate, db: Session = Depends(get_db)):
     item = db.query(models.BottleInventory).filter(models.BottleInventory.id == item_id).first()

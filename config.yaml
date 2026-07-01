@@ -1,5 +1,5 @@
 name: "Just Another Wine App"
-version: "1.0.1"
+version: "1.0.2"
 slug: "just_another_wine_app"
 description: "Track your wine cellar — bottles, zones, climate sensors, cameras, and alerts."
 url: "https://github.com/TerrordactylDesigns/just-another-wine-app"
@@ -15,7 +15,6 @@ panel_title: "Just Another Wine App"
 panel_admin: false
 ingress: true
 ingress_port: 8099
-panel_admin: false
 options:
   log_level: "info"
   snapshot_retention_days: 30

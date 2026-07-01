@@ -119,6 +119,9 @@ async function addToWishlist() {
     external_url: document.getElementById("w-url").value,
     notes: document.getElementById("w-notes").value,
   });
+  // Clear all fields
+  ["w-producer","w-name","w-vintage","w-region","w-price","w-url","w-notes"]
+    .forEach(id => document.getElementById(id).value = "");
   document.getElementById("add-modal").classList.remove("open");
   loadWishlist();
 }

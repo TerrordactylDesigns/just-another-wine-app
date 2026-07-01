@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cellars — Just Another Wine App</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div id="global-alert-banner"></div>
+
+    <div class="page-header">
+      <div>
+        <div class="eyebrow">Cellars</div>
+        <h1>All Cellars</h1>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-accent" onclick="document.getElementById('add-modal').classList.add('open')">+ Add Cellar</button>
+      </div>
+    </div>
+
+    <div class="card-grid" id="cellar-list">
+      <p style="color:var(--color-text-dim);">Loading…</p>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Cellar</h3>
+      <button onclick="document.getElementById('add-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Name</label>
+    <input type="text" id="c-name" placeholder="e.g. Basement Cellar, Office Wine Fridge" />
+    <label>Location</label>
+    <input type="text" id="c-location" placeholder="e.g. Home, Storage Unit 4B" />
+    <label>Notes</label>
+    <textarea id="c-notes"></textarea>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="createCellar()">Add Cellar</button>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/alerts.js"></script>
+<script>
+renderSidebar("cellars");
+
+async function loadCellars() {
+  const cellars = await API.get("/api/cellars");
+  const el = document.getElementById("cellar-list");
+
+  if (cellars.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No cellars yet</h3><p>Add your first cellar to start organizing zones, bottles, sensors, and cameras.</p></div>`;
+    return;
+  }
+
+  const cards = await Promise.all(
+    cellars.map(async (c) => {
+      const zones = await API.get(`/api/cellars/${c.id}/zones`);
+      return `
+        <a href="cellar.html?id=${c.id}" class="card" style="display:block;color:inherit;">
+          <h3>${escapeHtml(c.name)}</h3>
+          <p style="color:var(--color-text-dim);margin-top:4px;">${escapeHtml(c.location || "")}</p>
+          <p style="margin-top:var(--space-3);font-size:13px;color:var(--color-text-dim);">${zones.length} zone${zones.length !== 1 ? "s" : ""}</p>
+        </a>`;
+    })
+  );
+  el.innerHTML = cards.join("");
+}
+
+async function createCellar() {
+  const name = document.getElementById("c-name").value.trim();
+  if (!name) return;
+  const cellar = await API.post("/api/cellars", {
+    name,
+    location: document.getElementById("c-location").value,
+    notes: document.getElementById("c-notes").value,
+  });
+  document.getElementById("add-modal").classList.remove("open");
+  window.location.href = `cellar.html?id=${cellar.id}`;
+}
+
+loadCellars();
+</script>
+</body>
+</html>

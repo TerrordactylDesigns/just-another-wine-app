@@ -14,17 +14,36 @@
 
     <div class="page-header">
       <div>
-        <div class="eyebrow">Cellar</div>
+        <div class="eyebrow"><a href="cellars.html" style="color:var(--color-accent-bright);">Cellars</a> / Cellar</div>
         <h1 id="cellar-name">Loading…</h1>
         <p id="cellar-location" style="color:var(--color-text-dim);"></p>
       </div>
       <div class="page-actions">
+        <button class="btn" onclick="document.getElementById('edit-modal').classList.add('open')">Edit Cellar</button>
         <button class="btn btn-accent" onclick="document.getElementById('zone-modal').classList.add('open')">+ Add Zone</button>
       </div>
     </div>
 
     <section class="card-grid" id="zone-list" style="margin-bottom: var(--space-6);"></section>
   </main>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Edit Cellar</h3>
+      <button onclick="document.getElementById('edit-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Name</label>
+    <input type="text" id="edit-name" />
+    <label>Location</label>
+    <input type="text" id="edit-location" />
+    <label>Notes</label>
+    <textarea id="edit-notes"></textarea>
+    <div style="display:flex;gap:var(--space-3);">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="saveCellar()">Save</button>
+      <button class="btn btn-danger" style="justify-content:center;" onclick="deleteCellar()">Delete Cellar</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="zone-modal">
@@ -46,13 +65,32 @@
 <script src="js/nav.js"></script>
 <script src="js/alerts.js"></script>
 <script>
-renderSidebar(null);
+renderSidebar("cellars");
 const cellarId = new URLSearchParams(window.location.search).get("id");
 
 async function loadCellar() {
   const cellar = await API.get(`/api/cellars/${cellarId}`);
   document.getElementById("cellar-name").textContent = cellar.name;
   document.getElementById("cellar-location").textContent = cellar.location || "";
+  document.getElementById("edit-name").value = cellar.name || "";
+  document.getElementById("edit-location").value = cellar.location || "";
+  document.getElementById("edit-notes").value = cellar.notes || "";
+}
+
+async function saveCellar() {
+  await API.put(`/api/cellars/${cellarId}`, {
+    name: document.getElementById("edit-name").value,
+    location: document.getElementById("edit-location").value,
+    notes: document.getElementById("edit-notes").value,
+  });
+  document.getElementById("edit-modal").classList.remove("open");
+  loadCellar();
+}
+
+async function deleteCellar() {
+  if (!confirm("Delete this cellar and all its zones? Bottles and wines will remain in inventory.")) return;
+  await API.del(`/api/cellars/${cellarId}`);
+  window.location.href = "cellars.html";
 }
 
 async function loadZones() {

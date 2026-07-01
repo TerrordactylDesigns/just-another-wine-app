@@ -105,12 +105,19 @@ button {
   overflow-y: auto;
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
 .sidebar-brand {
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 700;
   color: var(--color-text);
-  margin-bottom: var(--space-6);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -121,6 +128,18 @@ button {
   height: 22px;
   flex-shrink: 0;
 }
+
+.sidebar-toggle {
+  display: none;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: 6px 8px;
+  flex-shrink: 0;
+}
+
+.sidebar-nav { display: block; }
 
 .nav-section {
   margin-bottom: var(--space-5);
@@ -486,6 +505,14 @@ textarea { resize: vertical; min-height: 80px; }
     border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
+  .sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+  .sidebar-nav {
+    display: none;
+    max-height: 70vh;
+    overflow-y: auto;
+    margin-top: var(--space-4);
+  }
+  .sidebar-nav.open { display: block; }
   .main { padding: var(--space-5) var(--space-4); }
 }
 

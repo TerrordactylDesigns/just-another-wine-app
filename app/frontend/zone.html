@@ -15,8 +15,14 @@
 
     <div class="page-header">
       <div>
-        <div class="eyebrow">Zone</div>
+        <div class="eyebrow" id="zone-breadcrumb"><a href="cellars.html" style="color:var(--color-accent-bright);">Cellars</a> / Zone</div>
         <h1 id="zone-name">Loading…</h1>
+        <p id="zone-meta" style="color:var(--color-text-dim);font-size:13px;"></p>
+      </div>
+      <div class="page-actions">
+        <button class="btn" onclick="document.getElementById('edit-modal').classList.add('open')">Edit Zone</button>
+        <a class="btn btn-accent" id="add-sensor-link" href="sensors.html">+ Add Sensor</a>
+        <a class="btn btn-accent" id="add-camera-link" href="cameras.html">+ Add Camera</a>
       </div>
     </div>
 
@@ -37,31 +43,85 @@
   </main>
 </div>
 
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header"><h3>Edit Zone</h3>
+      <button onclick="document.getElementById('edit-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+    </div>
+    <label>Name</label>
+    <input type="text" id="edit-name" />
+    <label>Target Temp (°F)</label>
+    <input type="number" id="edit-temp" />
+    <label>Target Humidity (%)</label>
+    <input type="number" id="edit-humidity" />
+    <label>Notes</label>
+    <textarea id="edit-notes"></textarea>
+    <div style="display:flex;gap:var(--space-3);">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="saveZone()">Save</button>
+      <button class="btn btn-danger" style="justify-content:center;" onclick="deleteZone()">Delete Zone</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/api.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/alerts.js"></script>
 <script>
-renderSidebar(null);
+renderSidebar("cellars");
 const zoneId = new URLSearchParams(window.location.search).get("id");
+let _cellarId = null;
 
 async function loadZone() {
   const zone = await API.get(`/api/zones/${zoneId}`);
+  _cellarId = zone.cellar_id;
   document.getElementById("zone-name").textContent = zone.name;
+
+  // Update breadcrumb with link to parent cellar
+  document.getElementById("zone-breadcrumb").innerHTML =
+    `<a href="cellars.html" style="color:var(--color-accent-bright);">Cellars</a> /
+     <a href="cellar.html?id=${zone.cellar_id}" style="color:var(--color-accent-bright);">Cellar</a> / Zone`;
+
+  const meta = [];
+  if (zone.target_temp_f) meta.push(`Target ${zone.target_temp_f}°F`);
+  if (zone.target_humidity) meta.push(`${zone.target_humidity}% RH`);
+  document.getElementById("zone-meta").textContent = meta.join(" · ");
+
+  // Pre-fill edit form
+  document.getElementById("edit-name").value = zone.name || "";
+  document.getElementById("edit-temp").value = zone.target_temp_f || "";
+  document.getElementById("edit-humidity").value = zone.target_humidity || "";
+  document.getElementById("edit-notes").value = zone.notes || "";
+}
+
+async function saveZone() {
+  await API.put(`/api/zones/${zoneId}`, {
+    name: document.getElementById("edit-name").value,
+    cellar_id: _cellarId,
+    target_temp_f: parseFloat(document.getElementById("edit-temp").value) || null,
+    target_humidity: parseFloat(document.getElementById("edit-humidity").value) || null,
+    notes: document.getElementById("edit-notes").value,
+  });
+  document.getElementById("edit-modal").classList.remove("open");
+  loadZone();
+}
+
+async function deleteZone() {
+  if (!confirm("Delete this zone? Bottles assigned here will lose their zone association.")) return;
+  await API.del(`/api/zones/${zoneId}`);
+  window.location.href = _cellarId ? `cellar.html?id=${_cellarId}` : "cellars.html";
 }
 
 async function loadSensors() {
   const sensors = await API.get(`/api/sensors?zone_id=${zoneId}`);
   const el = document.getElementById("sensor-cards");
   if (sensors.length === 0) {
-    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>No sensors assigned to this zone yet.</p></div>`;
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p style="color:var(--color-text-dim);">No sensors in this zone yet. <a href="sensors.html">Add a sensor →</a></p></div>`;
     return;
   }
   const cards = await Promise.all(
     sensors.map(async (s) => {
       let latest = null;
-      try {
-        latest = await API.get(`/api/sensors/${s.id}/readings/latest`);
-      } catch (_) {}
+      try { latest = await API.get(`/api/sensors/${s.id}/readings/latest`); } catch (_) {}
       return `
         <a href="sensor-detail.html?id=${s.id}" class="stat-card" style="display:block;color:inherit;">
           <div class="stat-value" style="font-size:24px;">${latest ? latest.value : "—"} <span style="font-size:13px;color:var(--color-text-dim);">${s.unit || ""}</span></div>
@@ -76,21 +136,17 @@ async function loadCameras() {
   const cameras = await API.get(`/api/cameras?zone_id=${zoneId}`);
   const el = document.getElementById("camera-cards");
   if (cameras.length === 0) {
-    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>No cameras assigned to this zone yet.</p></div>`;
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p style="color:var(--color-text-dim);">No cameras in this zone yet. <a href="cameras.html">Add a camera →</a></p></div>`;
     return;
   }
-  el.innerHTML = cameras
-    .map(
-      (c) => `
-      <a href="camera-detail.html?id=${c.id}" class="card" style="display:block;color:inherit;">
-        <div style="background:var(--color-bg);border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:var(--space-3);overflow:hidden;">
-          <img src="${API.base}/api/cameras/${c.id}/snapshot" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
-        </div>
-        <h3 style="font-size:15px;">${escapeHtml(c.name)}</h3>
-        <p style="font-size:12px;color:var(--color-text-dim);margin-top:4px;">${c.enabled ? "Enabled" : "Disabled"}</p>
-      </a>`
-    )
-    .join("");
+  el.innerHTML = cameras.map((c) => `
+    <a href="camera-detail.html?id=${c.id}" class="card" style="display:block;color:inherit;">
+      <div style="background:var(--color-bg);border-radius:8px;height:120px;margin-bottom:var(--space-3);overflow:hidden;">
+        <img src="${API.base}/api/cameras/${c.id}/snapshot" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />
+      </div>
+      <h3 style="font-size:15px;">${escapeHtml(c.name)}</h3>
+      <p style="font-size:12px;color:var(--color-text-dim);margin-top:4px;">${c.enabled ? "Enabled" : "Disabled"}</p>
+    </a>`).join("");
 }
 
 async function loadBottles() {
@@ -124,13 +180,11 @@ async function loadZoneAlerts() {
   const relevant = alerts.filter((a) => a.entity_type === "zone" && a.entity_id === parseInt(zoneId));
   const el = document.getElementById("zone-alerts");
   if (relevant.length === 0) return;
-  el.innerHTML = relevant
-    .map(
-      (a) => `<div class="banner ${a.severity === "critical" ? "critical" : "warning"}" style="margin-bottom:8px;">
-        <span><strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(a.message || "")}</span>
-      </div>`
-    )
-    .join("");
+  el.innerHTML = relevant.map((a) =>
+    `<div class="banner ${a.severity === "critical" ? "critical" : "warning"}" style="margin-bottom:8px;">
+      <span><strong>${escapeHtml(a.title)}</strong> — ${escapeHtml(a.message || "")}</span>
+    </div>`
+  ).join("");
 }
 
 loadZone();

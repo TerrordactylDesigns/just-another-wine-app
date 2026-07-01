@@ -7,6 +7,12 @@ function renderSidebar(activePage) {
   const links = [
     { section: "Overview", items: [{ href: "index.html", label: "Dashboard", page: "index" }] },
     {
+      section: "Cellars",
+      items: [
+        { href: "cellars.html", label: "All Cellars", page: "cellars" },
+      ],
+    },
+    {
       section: "Wines",
       items: [
         { href: "inventory.html", label: "Inventory", page: "inventory" },
@@ -31,35 +37,53 @@ function renderSidebar(activePage) {
   ];
 
   const html = `
-    <div class="sidebar-brand">
-      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M8 2h8v4a4 4 0 0 1-1 2.5V14a4 4 0 0 0 1 2.5V22H8v-5.5A4 4 0 0 0 9 14V8.5A4 4 0 0 1 8 6V2z"/>
-      </svg>
-      Just Another Wine App
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 2h8v4a4 4 0 0 1-1 2.5V14a4 4 0 0 0 1 2.5V22H8v-5.5A4 4 0 0 0 9 14V8.5A4 4 0 0 1 8 6V2z"/>
+        </svg>
+        Just Another Wine App
+      </div>
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
     </div>
-    ${links
-      .map(
-        (section) => `
-      <div class="nav-section">
-        <div class="nav-label">${section.section}</div>
-        ${section.items
-          .map(
-            (item) => `
-          <a href="${item.href}" class="nav-link ${item.page === activePage ? "active" : ""}">
-            <span>${item.label}</span>
-            ${
-              item.badges
-                ? `<span><span class="nav-badge critical" id="nav-badge-critical" style="display:none;"></span>
-                   <span class="nav-badge warning" id="nav-badge-warning" style="display:none;margin-left:4px;"></span></span>`
-                : ""
-            }
-          </a>`
-          )
-          .join("")}
-      </div>`
-      )
-      .join("")}
+    <div class="sidebar-nav" id="sidebar-nav">
+      ${links
+        .map(
+          (section) => `
+        <div class="nav-section">
+          <div class="nav-label">${section.section}</div>
+          ${section.items
+            .map(
+              (item) => `
+            <a href="${item.href}" class="nav-link ${item.page === activePage ? "active" : ""}">
+              <span>${item.label}</span>
+              ${
+                item.badges
+                  ? `<span><span class="nav-badge critical" id="nav-badge-critical" style="display:none;"></span>
+                     <span class="nav-badge warning" id="nav-badge-warning" style="display:none;margin-left:4px;"></span></span>`
+                  : ""
+              }
+            </a>`
+            )
+            .join("")}
+        </div>`
+        )
+        .join("")}
+    </div>
   `;
 
   document.getElementById("sidebar").innerHTML = html;
+
+  const toggle = document.getElementById("sidebar-toggle");
+  const nav = document.getElementById("sidebar-nav");
+  toggle.addEventListener("click", () => {
+    const isOpen = nav.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
 }

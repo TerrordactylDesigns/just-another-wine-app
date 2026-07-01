@@ -36,7 +36,7 @@
 <div class="modal-overlay" id="add-modal">
   <div class="modal">
     <div class="modal-header"><h3>Add to Wishlist</h3>
-      <button onclick="document.getElementById('add-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
+      <button onclick="clearWishlistForm(); document.getElementById('add-modal').classList.remove('open')" style="background:none;border:none;color:var(--color-text-dim);font-size:18px;">&times;</button>
     </div>
     <label>Producer</label><input type="text" id="w-producer" />
     <label>Wine Name</label><input type="text" id="w-name" />
@@ -109,21 +109,35 @@ async function loadWishlist() {
     .join("");
 }
 
+function clearWishlistForm() {
+  ["w-producer","w-name","w-vintage","w-region","w-price","w-url","w-notes"]
+    .forEach(id => document.getElementById(id).value = "");
+}
+
 async function addToWishlist() {
-  await API.post("/api/wishlist", {
-    producer: document.getElementById("w-producer").value,
-    name: document.getElementById("w-name").value,
+  const producer = document.getElementById("w-producer").value.trim();
+  const name = document.getElementById("w-name").value.trim();
+  if (!producer || !name) {
+    alert("Producer and wine name are required.");
+    return;
+  }
+  const payload = {
+    producer,
+    name,
     vintage: parseInt(document.getElementById("w-vintage").value) || null,
     region: document.getElementById("w-region").value,
     target_price: parseFloat(document.getElementById("w-price").value) || null,
     external_url: document.getElementById("w-url").value,
     notes: document.getElementById("w-notes").value,
-  });
-  // Clear all fields
-  ["w-producer","w-name","w-vintage","w-region","w-price","w-url","w-notes"]
-    .forEach(id => document.getElementById(id).value = "");
-  document.getElementById("add-modal").classList.remove("open");
-  loadWishlist();
+  };
+  try {
+    await API.post("/api/wishlist", payload);
+    clearWishlistForm();
+    document.getElementById("add-modal").classList.remove("open");
+    loadWishlist();
+  } catch (e) {
+    alert("Failed to add wine: " + e.message);
+  }
 }
 
 async function deleteWishlistItem(id) {
